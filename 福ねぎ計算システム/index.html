@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<link rel="manifest" href="manifest.json">
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("service-worker.js");
+  }
+</script>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>福ねぎ出荷数量計算システム</title>
+
+<style>
+  body { font-family: sans-serif; padding: 20px; background:#f7f7f7; }
+  h1 { font-size: 28px; margin-bottom: 20px; }
+  h2 { font-size: 22px; margin-bottom: 10px; }
+  .section { margin-bottom: 25px; }
+  .label { font-size: 20px; display: block; margin-bottom: 5px; }
+  input[type="number"] {
+    width: 20%;
+    padding: 14px;
+    font-size: 22px;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+  }
+  .weekday-btn {
+    font-size: 20px;
+    padding: 12px 0;
+    width: 18%;
+    margin-right: 2%;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    border: none;
+    background: #ddd;
+  }
+  .weekday-btn.active {
+    background: #4CAF50;
+    color: white;
+  }
+  .dest-row {
+    background: white;
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    font-size: 20px;
+  }
+  .dest-input {
+    width: 30%;
+    padding: 10px;
+    font-size: 20px;
+    margin-left: 5px;
+  }
+</style>
+</head>
+<body>
+
+<h1>福ねぎ出荷数量計算システム</h1>
+
+<h2>① 入荷数量</h2>
+<div class="section">
+
+  <label class="label">630数量</label>
+  <input type="number" id="r630Input" value="0" oninput="calcTotal()">
+
+  <label class="label">○調数量</label>
+  <input type="number" id="choInput" value="0" oninput="calcTotal()">
+
+  <label class="label">合計入荷数量</label>
+  <div id="totalQty" style="font-size:26px; font-weight:bold;">0</div>
+
+ </div>
+
+<h2>② 繰り越し希望数量</h2>
+<div class="section">
+  <label class="label">繰り越し数量</label>
+  <input type="number" id="carryInput" value="0" oninput="calcTotal()">
+</div>
+
+<h2>③ 出荷可能数量</h2>
+<div class="section">
+  <label class="label" style="margin-top:10px;">出荷可能数量（合計 − 繰り越し）</label>
+  <div id="displayShippable" style="font-size:26px; font-weight:bold; color:#2a5;">0</div>
+</div>
+
+<h2>④ 今日は何曜日？</h2>
+
+<div id="weekdayArea" class="section">
+  <button class="weekday-btn" onclick="selectDay('mon', this)">月</button>
+  <button class="weekday-btn" onclick="selectDay('tue', this)">火</button>
+  <button class="weekday-btn" onclick="selectDay('wed', this)">水</button>
+  <button class="weekday-btn" onclick="selectDay('thu', this)">木</button>
+  <button class="weekday-btn" onclick="selectDay('fri', this)">金</button>
+</div>
+
+<div id="destArea" class="section" style="font-size:20px;">
+  曜日を選んでください
+</div>
+
+<h2>⑤ 残数量</h2>
+<div class="section">
+  <div id="leftoverQty" style="font-size:26px; font-weight:bold; color:#d33;">0</div>
+  <div id="errorMsg" style="font-size:20px; color:#d33; margin-top:10px;"></div>
+</div>
+
+<!-- 内部用：出荷可能数量 -->
+<div id="totalshippableQty" style="display:none;">0</div>
+
+<script>
+// 合計入荷数量 + 出荷可能数量の計算
+function calcTotal() {
+  const cho = Number(document.getElementById("choInput").value);
+  const r630 = Number(document.getElementById("r630Input").value);
+  const carry = Number(document.getElementById("carryInput").value);
+
+  const total = cho + r630;
+  const shippable = total - carry;
+
+  document.getElementById("totalQty").textContent = total;
+  document.getElementById("displayShippable").textContent = shippable;
+
+  document.getElementById("totalshippableQty").textContent = shippable;
+
+  calcShipping();
+}
+
+// 曜日ごとの出荷先
+const destinations = {
+  mon: ["アルク", "北九州", "大分","福岡","Yフーズ","新宿ベジフル"],
+  tue: ["大阪"],
+  wed: ["東京","福岡","北九州","大分","マックスバリュ"],
+  thu: ["アルク","福岡","Yフーズ"],
+  fri: ["大阪","東京","福岡","北九州","大分","新宿ベジフル"]
+};
+
+let currentDay = "";
+
+// 曜日選択
+function selectDay(day, btn) {
+  currentDay = day;
+
+  document.querySelectorAll(".weekday-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+
+  updateDestinations(day);
+}
+
+// 出荷先表示（アルクは注文変更で出荷数も追従）
+function updateDestinations(day) {
+  const area = document.getElementById("destArea");
+
+  let html = "";
+
+  destinations[day].forEach((name, index) => {
+    if (name === "アルク") {
+      html += `
+        <div class="dest-row">
+          ${name}<br>
+          注文数<input type="number" class="dest-input" id="order_${index}" oninput="onArukuOrderChange(${index})">
+          出荷数<input type="number" class="dest-input" id="ship_${index}" oninput="calcShipping()">
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="dest-row">
+          ${name}<br>
+          注文数<input type="number" class="dest-input" id="order_${index}" oninput="calcShipping()">
+          出荷数<input type="number" class="dest-input" id="ship_${index}" oninput="calcShipping()">
+        </div>
+      `;
+    }
+  });
+
+  // ★ 出荷先追加ボタン
+  html += `
+    <button onclick="addDestination()" 
+            style="font-size:20px; padding:10px; margin-top:10px;">
+      ＋ 出荷先を追加
+    </button>
+  `;
+
+  area.innerHTML = html;
+}
+
+// 出荷先追加
+function addDestination() {
+  const name = prompt("追加する出荷先名を入力してください：");
+  if (!name) return;
+
+  destinations[currentDay].push(name);
+
+  updateDestinations(currentDay);
+  calcShipping();
+}
+
+// アルクの注文数変更時：出荷数にそのまま反映（デフォルト）
+function onArukuOrderChange(index) {
+  const orderVal = document.getElementById(`order_${index}`).value;
+  const shipInput = document.getElementById(`ship_${index}`);
+  shipInput.value = orderVal;  // 同じ数値を反映
+  calcShipping();
+}
+
+// 出荷可能数量計算 + アルク優先 + 案分 + 残数量 + 制約
+function calcShipping() {
+  if (!currentDay) return;
+
+  const total = Number(document.getElementById("totalshippableQty").textContent);
+  const destList = destinations[currentDay];
+
+  let orders = [];
+  destList.forEach((_, i) => {
+    const val = Number(document.getElementById(`order_${i}`)?.value || 0);
+    orders.push(val);
+  });
+
+  // アルクの index を取得
+  const arukuIndex = destList.indexOf("アルク");
+
+  // アルクの出荷数
+  let arukuShip = 0;
+  if (arukuIndex !== -1) {
+    const orderVal = orders[arukuIndex];
+    const shipInput = document.getElementById(`ship_${arukuIndex}`);
+
+    if (shipInput.value === "") {
+      shipInput.value = orderVal;
+    }
+
+    arukuShip = Number(shipInput.value);
+  }
+
+  // 案分対象数量
+  const remainingQty = total - arukuShip;
+
+  // 残りの注文合計
+  let otherOrderTotal = 0;
+  destList.forEach((name, i) => {
+    if (name !== "アルク") {
+      otherOrderTotal += orders[i];
+    }
+  });
+
+  // 出荷数計算
+  let sumShip = arukuShip;
+
+  destList.forEach((name, i) => {
+    const shipInput = document.getElementById(`ship_${i}`);
+
+    if (name === "アルク") return;
+
+    if (otherOrderTotal === 0) {
+      shipInput.value = 0;
+      return;
+    }
+
+    const ratio = orders[i] / otherOrderTotal;
+    let shipQty = Math.floor(ratio * remainingQty);
+
+    // ★ 最低1、注文数を超えない
+    if (orders[i] > 0) {
+      shipQty = Math.max(1, shipQty);
+      shipQty = Math.min(shipQty, orders[i]);
+    } else {
+      shipQty = 0;
+    }
+
+    shipInput.value = shipQty;
+    sumShip += shipQty;
+  });
+
+  // 手入力で注文数を超えた場合も制限
+  destList.forEach((name, i) => {
+    const shipInput = document.getElementById(`ship_${i}`);
+    const orderVal = orders[i];
+
+    if (Number(shipInput.value) > orderVal) {
+      shipInput.value = orderVal;
+    }
+  });
+
+  // 残数量
+  const leftover = total - sumShip;
+  document.getElementById("leftoverQty").textContent = leftover;
+
+  // ★ エラーメッセージ
+  const errorMsg = document.getElementById("errorMsg");
+  if (leftover < 0) {
+    errorMsg.textContent = "出荷可能数量が少ないので、手作業で出荷数を調整してください";
+  } else {
+    errorMsg.textContent = "";
+  }
+}
+</script>
+
+</body>
+</html>
