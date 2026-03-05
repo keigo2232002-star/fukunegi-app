@@ -13,7 +13,7 @@
 <title>福ねぎ出荷数量計算システム</title>
 
 <style>
-  body { font-family: sans-serif; padding: 20px; background:#f7f7f7; }
+  body { font-family: sans-serif; padding: 20px; background:#e8f5e9; }
   h1 { font-size: 28px; margin-bottom: 20px; }
   h2 { font-size: 22px; margin-bottom: 10px; }
   .section { margin-bottom: 25px; }
@@ -37,11 +37,12 @@
     background: #ddd;
   }
   .weekday-btn.active {
-    background: #4CAF50;
+    background: #43a047;
     color: white;
   }
   .dest-row {
     background: white;
+    border-left: 6px solid #66bb6a; /* 緑のアクセント */
     padding: 12px;
     margin-bottom: 10px;
     border-radius: 8px;
@@ -53,6 +54,17 @@
     font-size: 20px;
     margin-left: 5px;
   }
+
+#displayShippable {
+  color:#2e7d32; /* 深い緑 */
+}
+
+#leftoverQty {
+  color:#c62828; /* 赤はそのまま強調 */
+}
+
+
+
 </style>
 </head>
 <body>
@@ -63,10 +75,10 @@
 <h2>① 入荷数量</h2>
 <div class="section">
 
-  <label class="label">630数量</label>
+  <label class="label">630数量(これは確定値ですね)</label>
   <input type="number" id="r630Input" value="0" oninput="calcTotal()">
 
-  <label class="label">○調数量</label>
+  <label class="label">○調数量(これは予想値です）</label>
   <input type="number" id="choInput" value="0" oninput="calcTotal()">
 
   <label class="label">合計入荷数量</label>
@@ -76,7 +88,7 @@
 
 <h2>② 繰り越し希望数量</h2>
 <div class="section">
-  <label class="label">繰り越し数量</label>
+  <label class="label">翌日以降に持ち越したい（貯金したい）数量</label>
   <input type="number" id="carryInput" value="0" oninput="calcTotal()">
 </div>
 
@@ -87,6 +99,9 @@
 </div>
 
 <h2>④ 今日は何曜日？</h2>
+<div id="destArea" class="section" style="font-size:20px;">
+  曜日を選んでください
+</div>
 
 <div id="weekdayArea" class="section">
   <button class="weekday-btn" onclick="selectDay('mon', this)">月</button>
@@ -96,9 +111,7 @@
   <button class="weekday-btn" onclick="selectDay('fri', this)">金</button>
 </div>
 
-<div id="destArea" class="section" style="font-size:20px;">
-  曜日を選んでください
-</div>
+
 
 <h2>⑤ 残数量</h2>
 <div class="section">
