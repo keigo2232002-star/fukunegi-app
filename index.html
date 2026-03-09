@@ -14,7 +14,6 @@
 
 <style>
   body { font-family: sans-serif; padding: 20px; background:#e8f5e9; }
-  h1 { font-size: 28px; margin-bottom: 20px; }
   h2 { font-size: 22px; margin-bottom: 10px; }
   .section { margin-bottom: 25px; }
   .label { font-size: 20px; display: block; margin-bottom: 5px; }
@@ -42,7 +41,7 @@
   }
   .dest-row {
     background: white;
-    border-left: 6px solid #66bb6a; /* 緑のアクセント */
+    border-left: 6px solid #66bb6a;
     padding: 12px;
     margin-bottom: 10px;
     border-radius: 8px;
@@ -54,23 +53,12 @@
     font-size: 20px;
     margin-left: 5px;
   }
-
-#displayShippable {
-  color:#2e7d32; /* 深い緑 */
-}
-
-#leftoverQty {
-  color:#c62828; /* 赤はそのまま強調 */
-}
-
-
-
 </style>
 </head>
 <body>
-<img src="シュッカー.png" alt="システムロゴ" 
-     style="width:100%; max-width:500px; display:block; margin:0 auto 20px;">
 
+<img src="シュッカー.png" alt="システムロゴ"
+     style="width:100%; max-width:500px; display:block; margin:0 auto 20px;">
 
 <h2>① 入荷数量</h2>
 <div class="section">
@@ -82,23 +70,31 @@
   <input type="number" id="choInput" value="0" oninput="calcTotal()">
 
   <label class="label">合計入荷数量</label>
-  <div id="totalQty" style="font-size:26px; font-weight:bold;">0</div>
+  <div id="productionQty" style="font-size:26px; font-weight:bold;">0</div>
 
  </div>
+ 
+ <h2>② 前日からの繰り越し数量</h2>
+<div class="section">
 
-<h2>② 繰り越し希望数量</h2>
+  <label class="label">前日からの繰り越し数量</label>
+  <input type="number" id="kurikoshiInput" value="0" oninput="calcTotal()">
+
+   </div>
+
+<h2>③ 繰り越し希望数量</h2>
 <div class="section">
   <label class="label">翌日以降に持ち越したい（貯金したい）数量</label>
   <input type="number" id="carryInput" value="0" oninput="calcTotal()">
 </div>
 
-<h2>③ 出荷可能数量</h2>
+<h2>④　出荷可能数量</h2>
 <div class="section">
-  <label class="label" style="margin-top:10px;">出荷可能数量（合計 − 繰り越し）</label>
-  <div id="displayShippable" style="font-size:26px; font-weight:bold; color:#2a5;">0</div>
+  <label class="label">出荷可能数量（合計 ＋前日からの繰り越し数量　− 翌日以降への繰り越し数量）</label>
+  <div id="displayShippable" style="font-size:26px; font-weight:bold;">0</div>
 </div>
 
-<h2>④ 今日は何曜日？</h2>
+<h2>⑤ 今日は何曜日？</h2>
 <div id="destArea" class="section" style="font-size:20px;">
   曜日を選んでください
 </div>
@@ -111,30 +107,28 @@
   <button class="weekday-btn" onclick="selectDay('fri', this)">金</button>
 </div>
 
-
-
 <h2>⑤ 残数量</h2>
 <div class="section">
-  <div id="leftoverQty" style="font-size:26px; font-weight:bold; color:#d33;">0</div>
-  <div id="errorMsg" style="font-size:20px; color:#d33; margin-top:10px;"></div>
+  <div id="leftoverQty" style="font-size:26px; font-weight:bold; color:#c62828;">0</div>
+  <div id="errorMsg" style="font-size:20px; color:#c62828; margin-top:10px;"></div>
 </div>
 
-<!-- 内部用：出荷可能数量 -->
 <div id="totalshippableQty" style="display:none;">0</div>
 
 <script>
-// 合計入荷数量 + 出荷可能数量の計算
+// 入荷数量計算
 function calcTotal() {
   const cho = Number(document.getElementById("choInput").value);
   const r630 = Number(document.getElementById("r630Input").value);
+  const kurikoshi = Number(document.getElementById("kurikoshiInput").value);
   const carry = Number(document.getElementById("carryInput").value);
 
-  const total = cho + r630;
+  const production = cho + r630;
+  const total = production + kurikoshi 
   const shippable = total - carry;
 
-  document.getElementById("totalQty").textContent = total;
+  document.getElementById("productionQty").textContent = production;
   document.getElementById("displayShippable").textContent = shippable;
-
   document.getElementById("totalshippableQty").textContent = shippable;
 
   calcShipping();
@@ -142,14 +136,13 @@ function calcTotal() {
 
 // 曜日ごとの出荷先
 const destinations = {
-  mon: ["アルク", "北九州", "大分","福岡","Yフーズ","新宿ベジフル"],
-  tue: ["大阪"],
-  wed: ["東京","福岡","北九州","大分","マックスバリュ"],
+  mon: ["アルク", "北九州", "大分","福岡","Yフーズ"],
+  tue: ["大阪","東京","福岡","北九州","大分","マックスバリュ"],
+  wed: [],
   thu: ["アルク","福岡","Yフーズ"],
   fri: ["大阪","東京","福岡","北九州","大分","新宿ベジフル"]
 };
 
-// ★ 特別扱い（注文数＝出荷数）
 const specialDest = ["アルク", "Yフーズ", "マックスバリュ", "新宿ベジフル"];
 
 let currentDay = "";
@@ -171,35 +164,31 @@ function updateDestinations(day) {
   let html = "";
 
   destinations[day].forEach((name, index) => {
-    if (specialDest.includes(name)) {
-      html += `
-        <div class="dest-row">
-          ${name}<br>
-          注文数<input type="number" class="dest-input" id="order_${index}" 
-                      oninput="onSpecialOrderChange(${index})">
-          出荷数<input type="number" class="dest-input" id="ship_${index}" 
-                      oninput="calcShipping()">
-        </div>
-      `;
-    } else {
-      html += `
-        <div class="dest-row">
-          ${name}<br>
-          注文数<input type="number" class="dest-input" id="order_${index}" 
-                      oninput="calcShipping()">
-          出荷数<input type="number" class="dest-input" id="ship_${index}" 
-                      oninput="calcShipping()">
-        </div>
-      `;
-    }
+    html += `
+      <div class="dest-row">
+        ${name}<br>
+        注文数<input type="number" class="dest-input" id="order_${index}"
+                    oninput="calcShipping()">
+        出荷数<input type="number" class="dest-input" id="ship_${index}"
+                    oninput="calcShipping()">
+        <span id="rate_${index}" style="margin-left:10px; font-weight:bold;">–</span>
+      </div>
+    `;
   });
 
-  // 出荷先追加ボタン
   html += `
-    <button onclick="addDestination()" 
+    <button onclick="addDestination()"
             style="font-size:20px; padding:10px; margin-top:10px;">
       ＋ 出荷先を追加
     </button>
+  `;
+
+  html += `
+    <div id="totalRow"
+         style="margin-top:20px; padding:12px; background:#fff; border-left:6px solid #2e7d32; border-radius:8px; font-size:22px; font-weight:bold;">
+      合計： 注文 <span id="totalOrder">0</span> ／ 出荷 <span id="totalShip">0</span>
+      （応諾率 <span id="totalRate">–</span>）
+    </div>
   `;
 
   area.innerHTML = html;
@@ -216,14 +205,6 @@ function addDestination() {
   calcShipping();
 }
 
-// 特別扱い：注文数＝出荷数
-function onSpecialOrderChange(index) {
-  const orderVal = document.getElementById(`order_${index}`).value;
-  const shipInput = document.getElementById(`ship_${index}`);
-  shipInput.value = orderVal;
-  calcShipping();
-}
-
 // 出荷計算
 function calcShipping() {
   if (!currentDay) return;
@@ -237,52 +218,50 @@ function calcShipping() {
     orders.push(val);
   });
 
-  // 特別扱いの合計出荷数
-  let specialShipTotal = 0;
+  // 固定出荷先（特別扱い + 注文数5以下）
+  let fixedShipTotal = 0;
 
   destList.forEach((name, i) => {
-    if (specialDest.includes(name)) {
-      const orderVal = orders[i];
-      const shipInput = document.getElementById(`ship_${i}`);
+    const orderVal = orders[i];
+    const shipInput = document.getElementById(`ship_${i}`);
 
-      if (shipInput.value === "") {
-        shipInput.value = orderVal;
-      }
-
-      specialShipTotal += Number(shipInput.value);
+    if (specialDest.includes(name) || orderVal <= 5) {
+      shipInput.value = orderVal;
+      fixedShipTotal += orderVal;
     }
   });
 
-  // 案分対象数量
-  const remainingQty = total - specialShipTotal;
+  // 案分対象の残数量
+  const remainingQty = total - fixedShipTotal;
 
   // 案分対象の注文合計
   let otherOrderTotal = 0;
   destList.forEach((name, i) => {
-    if (!specialDest.includes(name)) {
+    if (!specialDest.includes(name) && orders[i] > 5) {
       otherOrderTotal += orders[i];
     }
   });
 
-  // 出荷数計算
-  let sumShip = specialShipTotal;
+  // 案分計算
+  let sumShip = fixedShipTotal;
 
   destList.forEach((name, i) => {
     const shipInput = document.getElementById(`ship_${i}`);
+    const orderVal = orders[i];
 
-    if (specialDest.includes(name)) return;
+    if (specialDest.includes(name) || orderVal <= 5) return;
 
     if (otherOrderTotal === 0) {
       shipInput.value = 0;
       return;
     }
 
-    const ratio = orders[i] / otherOrderTotal;
+    const ratio = orderVal / otherOrderTotal;
     let shipQty = Math.floor(ratio * remainingQty);
 
-    if (orders[i] > 0) {
+    if (orderVal > 0) {
       shipQty = Math.max(1, shipQty);
-      shipQty = Math.min(shipQty, orders[i]);
+      shipQty = Math.min(shipQty, orderVal);
     } else {
       shipQty = 0;
     }
@@ -291,25 +270,54 @@ function calcShipping() {
     sumShip += shipQty;
   });
 
-  // 手入力で注文数を超えた場合の制限
-  destList.forEach((name, i) => {
-    const shipInput = document.getElementById(`ship_${i}`);
-    const orderVal = orders[i];
-
-    if (Number(shipInput.value) > orderVal) {
-      shipInput.value = orderVal;
-    }
-  });
-
   // 残数量
   const leftover = total - sumShip;
   document.getElementById("leftoverQty").textContent = leftover;
 
   const errorMsg = document.getElementById("errorMsg");
-  if (leftover < 0) {
-    errorMsg.textContent = "出荷可能数量が少ないので、手作業で出荷数を調整してください";
+  errorMsg.textContent = leftover < 0
+    ? "出荷可能数量が少ないので、手作業で出荷数を調整してください"
+    : "";
+
+  // 応諾率（各行）
+  destList.forEach((name, i) => {
+    const orderVal = Number(document.getElementById(`order_${i}`)?.value || 0);
+    const shipVal = Number(document.getElementById(`ship_${i}`)?.value || 0);
+    const rateSpan = document.getElementById(`rate_${i}`);
+
+    if (orderVal === 0) {
+      rateSpan.textContent = "–";
+      rateSpan.style.color = "#2e7d32";
+      return;
+    }
+
+    let rate = Math.round((shipVal / orderVal) * 100);
+    rateSpan.textContent = rate + "%";
+
+    rateSpan.style.color = rate <= 70 ? "#c62828" : "#2e7d32";
+  });
+
+  // 合計注文数・合計出荷数・全体応諾率
+  let totalOrder = 0;
+  let totalShip = 0;
+
+  destList.forEach((name, i) => {
+    totalOrder += Number(document.getElementById(`order_${i}`)?.value || 0);
+    totalShip += Number(document.getElementById(`ship_${i}`)?.value || 0);
+  });
+
+  document.getElementById("totalOrder").textContent = totalOrder;
+  document.getElementById("totalShip").textContent = totalShip;
+
+  const totalRateSpan = document.getElementById("totalRate");
+
+  if (totalOrder === 0) {
+    totalRateSpan.textContent = "–";
+    totalRateSpan.style.color = "#2e7d32";
   } else {
-    errorMsg.textContent = "";
+    let totalRate = Math.round((totalShip / totalOrder) * 100);
+    totalRateSpan.textContent = totalRate + "%";
+    totalRateSpan.style.color = totalRate <= 70 ? "#c62828" : "#2e7d32";
   }
 }
 </script>
